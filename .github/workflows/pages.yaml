@@ -1,0 +1,122 @@
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yaml'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    environment: pages
+    runs-on: [self-hosted, docker]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Create site structure
+        run: |
+          mkdir -p _site/repo/apt/dists/stable/main/binary-amd64
+          mkdir -p _site/repo/apt/dists/stable/main/binary-arm64
+          mkdir -p _site/repo/apt/pool/main
+          
+          # Copy website files
+          cp site/index.html _site/
+          cp site/style.css _site/
+          cp docs/assets/logo/Dux-logo.png _site/logo.png 2>/dev/null || true
+
+      - name: Download DEBs from latest release
+        run: |
+          gh release download --pattern '*.deb' --dir _site/repo/apt/pool/main || echo "No DEBs found"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate APT repository metadata
+        id: apt-metadata
+        run: |
+          cd _site/repo/apt
+          
+          if ls pool/main/*.deb 1> /dev/null 2>&1; then
+            echo "Generating APT metadata..."
+            echo "has_debs=true" >> $GITHUB_OUTPUT
+            
+            dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages 2>/dev/null || true
+            dpkg-scanpackages --arch arm64 pool/main > dists/stable/main/binary-arm64/Packages 2>/dev/null || true
+            
+            gzip -k dists/stable/main/binary-amd64/Packages || true
+            gzip -k dists/stable/main/binary-arm64/Packages || true
+            
+            cd dists/stable
+            cat > Release << EOF
+          Origin: dux
+          Label: dux
+          Suite: stable
+          Codename: stable
+          Architectures: amd64 arm64
+          Components: main
+          Description: dux APT repository
+          Date: $(date -Ru)
+          EOF
+            apt-ftparchive release . >> Release
+          else
+            echo "No DEBs found, deploying site only"
+            echo "has_debs=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sign APT repository
+        if: steps.apt-metadata.outputs.has_debs == 'true'
+        run: |
+          cd _site/repo/apt
+          
+          # Generate GPG key if not provided
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            cat > /tmp/gpg-batch << EOF
+          %no-protection
+          Key-Type: RSA
+          Key-Length: 4096
+          Name-Real: dux
+          Name-Email: dux@nikitasova.github.io
+          Expire-Date: 0
+          %commit
+          EOF
+            gpg --batch --gen-key /tmp/gpg-batch
+          else
+            echo "$GPG_PRIVATE_KEY" | gpg --import --batch
+          fi
+          
+          cd dists/stable
+          gpg --batch --yes --armor --detach-sign -o Release.gpg Release
+          gpg --batch --yes --armor --clearsign -o InRelease Release
+          cd ../..
+          gpg --armor --export > dux.gpg
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
