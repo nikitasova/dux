@@ -172,3 +172,113 @@ _dux_delete() {
         echo "Cancelled."
     fi
 }
+
+# ============================================================================
+# Shell Completions
+# ============================================================================
+
+# Get list of Docker context names
+_dux_get_contexts() {
+    docker context list --format '{{.Name}}' 2>/dev/null
+}
+
+# Zsh completion
+if [[ -n "$ZSH_VERSION" ]]; then
+    _dux_zsh_completion() {
+        local -a contexts
+        local -a options
+
+        options=(
+            '-c:Create new context'
+            '-r:Remote SSH context (use with -c)'
+            '-d:Delete context'
+            '-h:Show help'
+            '--create:Create new context'
+            '--remote:Remote SSH context (use with --create)'
+            '--delete:Delete context'
+            '--help:Show help'
+        )
+
+        # Check if we're completing after -d or --delete
+        if [[ "${words[(r)-d]}" == "-d" ]] || [[ "${words[(r)--delete]}" == "--delete" ]]; then
+            contexts=(${(f)"$(_dux_get_contexts)"})
+            _describe 'context' contexts
+            return
+        fi
+
+        # Check if we already have -c flag (don't complete contexts for create)
+        if [[ "${words[(r)-c]}" == "-c" ]] || [[ "${words[(r)--create]}" == "--create" ]]; then
+            # After -c, offer -r flag if not present
+            if [[ "${words[(r)-r]}" != "-r" ]] && [[ "${words[(r)--remote]}" != "--remote" ]]; then
+                _describe 'option' options
+            fi
+            return
+        fi
+
+        # Default: complete options and context names
+        contexts=(${(f)"$(_dux_get_contexts)"})
+        
+        if [[ "$PREFIX" == -* ]]; then
+            _describe 'option' options
+        else
+            _describe 'context' contexts
+            _describe 'option' options
+        fi
+    }
+
+    compdef _dux_zsh_completion dux
+fi
+
+# Bash completion
+if [[ -n "$BASH_VERSION" ]]; then
+    _dux_bash_completion() {
+        local cur prev words cword
+        _init_completion 2>/dev/null || {
+            COMPREPLY=()
+            cur="${COMP_WORDS[COMP_CWORD]}"
+            prev="${COMP_WORDS[COMP_CWORD-1]}"
+        }
+
+        local options="-c --create -r --remote -d --delete -h --help"
+
+        # After -d or --delete, complete context names
+        if [[ "$prev" == "-d" ]] || [[ "$prev" == "--delete" ]]; then
+            COMPREPLY=($(compgen -W "$(_dux_get_contexts)" -- "$cur"))
+            return
+        fi
+
+        # Check if -c is in the command (creating, don't show contexts)
+        local has_create=false
+        for word in "${COMP_WORDS[@]}"; do
+            if [[ "$word" == "-c" ]] || [[ "$word" == "--create" ]]; then
+                has_create=true
+                break
+            fi
+        done
+
+        if [[ "$has_create" == true ]]; then
+            # Only offer -r if not present
+            local has_remote=false
+            for word in "${COMP_WORDS[@]}"; do
+                if [[ "$word" == "-r" ]] || [[ "$word" == "--remote" ]]; then
+                    has_remote=true
+                    break
+                fi
+            done
+            if [[ "$has_remote" == false ]]; then
+                COMPREPLY=($(compgen -W "-r --remote" -- "$cur"))
+            fi
+            return
+        fi
+
+        # Default: complete options and context names
+        if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "$options" -- "$cur"))
+        else
+            local contexts="$(_dux_get_contexts)"
+            COMPREPLY=($(compgen -W "$contexts $options" -- "$cur"))
+        fi
+    }
+
+    complete -F _dux_bash_completion dux
+fi
