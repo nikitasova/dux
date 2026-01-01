@@ -18,14 +18,16 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO_URL="https://raw.githubusercontent.com/nikitasova/dux/main"
-INSTALL_DIR="$HOME/.dux"
+REPO="nikitasova/dux"
+REPO_URL="https://raw.githubusercontent.com/${REPO}/main"
+INSTALL_DIR="$HOME/.local/bin"
+PROMPT_DIR="$HOME/.dux"
 
 print_banner() {
     echo -e "${BLUE}"
     echo "  ┌─────────────────────────────────────┐"
     echo "  │         dux installer               │"
-    echo "  │   Docker Use Context - like kubectx │"
+    echo "  │   Fast Docker context switching     │"
     echo "  └─────────────────────────────────────┘"
     echo -e "${NC}"
 }
@@ -44,6 +46,34 @@ print_warn() {
 
 print_error() {
     echo -e "${RED}✗${NC} $1"
+}
+
+detect_os() {
+    case "$(uname -s)" in
+        Darwin*)
+            echo "darwin"
+            ;;
+        Linux*)
+            echo "linux"
+            ;;
+        *)
+            echo "unknown"
+            ;;
+    esac
+}
+
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64)
+            echo "amd64"
+            ;;
+        arm64|aarch64)
+            echo "arm64"
+            ;;
+        *)
+            echo "unknown"
+            ;;
+    esac
 }
 
 detect_shell() {
@@ -75,18 +105,96 @@ get_shell_rc() {
     esac
 }
 
+get_latest_release() {
+    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | \
+        grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
+}
+
 install_dux() {
-    print_info "Installing dux (context switcher)..."
-    curl -fsSL "$REPO_URL/cmd/dux.sh" -o "$INSTALL_DIR/dux.sh"
-    chmod +x "$INSTALL_DIR/dux.sh"
-    print_success "dux installed to $INSTALL_DIR/dux.sh"
+    local os=$(detect_os)
+    local arch=$(detect_arch)
+    
+    if [[ "$os" == "unknown" ]] || [[ "$arch" == "unknown" ]]; then
+        print_error "Unsupported platform: $(uname -s) $(uname -m)"
+        print_info "Please build from source: https://github.com/${REPO}"
+        exit 1
+    fi
+
+    print_info "Detecting platform: ${os}/${arch}"
+    
+    # Get latest release version
+    local version=$(get_latest_release)
+    if [[ -z "$version" ]]; then
+        print_warn "Could not detect latest version, using 'latest'"
+        version="latest"
+    else
+        print_info "Latest version: ${version}"
+    fi
+    
+    # Download binary
+    local binary_name="dux-${os}-${arch}"
+    local download_url="https://github.com/${REPO}/releases/latest/download/${binary_name}"
+    
+    print_info "Downloading dux..."
+    mkdir -p "$INSTALL_DIR"
+    
+    if curl -fsSL "$download_url" -o "$INSTALL_DIR/dux" 2>/dev/null; then
+        chmod +x "$INSTALL_DIR/dux"
+        print_success "dux installed to $INSTALL_DIR/dux"
+    else
+        # Fallback: try to build from source if Go is available
+        print_warn "Binary download failed. Trying to build from source..."
+        if command -v go &> /dev/null; then
+            go install "github.com/${REPO}/cmd/dux@latest"
+            print_success "dux installed via 'go install'"
+        else
+            print_error "Could not download binary and Go is not installed."
+            print_info "Please install Go or download manually from:"
+            print_info "  https://github.com/${REPO}/releases"
+            exit 1
+        fi
+    fi
 }
 
 install_prompt() {
     print_info "Installing dux-prompt (shell prompt)..."
-    curl -fsSL "$REPO_URL/cmd/dux-prompt.sh" -o "$INSTALL_DIR/dux-prompt.sh"
-    chmod +x "$INSTALL_DIR/dux-prompt.sh"
-    print_success "dux-prompt installed to $INSTALL_DIR/dux-prompt.sh"
+    mkdir -p "$PROMPT_DIR"
+    curl -fsSL "$REPO_URL/scripts/dux-prompt.sh" -o "$PROMPT_DIR/dux-prompt.sh"
+    chmod +x "$PROMPT_DIR/dux-prompt.sh"
+    print_success "dux-prompt installed to $PROMPT_DIR/dux-prompt.sh"
+}
+
+setup_completions() {
+    local shell_type=$(detect_shell)
+    
+    print_info "Setting up shell completions..."
+    
+    case "$shell_type" in
+        zsh)
+            # Add to .zshrc
+            local completion_cmd='eval "$(dux completion zsh)"'
+            if ! grep -q "dux completion" "$HOME/.zshrc" 2>/dev/null; then
+                echo "" >> "$HOME/.zshrc"
+                echo "# dux shell completion" >> "$HOME/.zshrc"
+                echo "$completion_cmd" >> "$HOME/.zshrc"
+                print_success "Zsh completions configured"
+            else
+                print_info "Completions already configured"
+            fi
+            ;;
+        bash)
+            local rc_file=$(get_shell_rc)
+            local completion_cmd='eval "$(dux completion bash)"'
+            if ! grep -q "dux completion" "$rc_file" 2>/dev/null; then
+                echo "" >> "$rc_file"
+                echo "# dux shell completion" >> "$rc_file"
+                echo "$completion_cmd" >> "$rc_file"
+                print_success "Bash completions configured"
+            else
+                print_info "Completions already configured"
+            fi
+            ;;
+    esac
 }
 
 show_setup_instructions() {
@@ -96,22 +204,24 @@ show_setup_instructions() {
     echo ""
     echo -e "${GREEN}Installation complete!${NC}"
     echo ""
-    echo "Add the following to your ${YELLOW}$shell_rc${NC}:"
-    echo ""
     
-    if [[ "$INSTALL_DUX" == "true" ]]; then
-        echo -e "${BLUE}# dux - Docker context switcher${NC}"
-        echo "source ~/.dux/dux.sh"
+    # Check if ~/.local/bin is in PATH
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        print_warn "~/.local/bin is not in your PATH"
+        echo ""
+        echo "Add to your ${YELLOW}$shell_rc${NC}:"
+        echo '  export PATH="$HOME/.local/bin:$PATH"'
         echo ""
     fi
     
     if [[ "$INSTALL_PROMPT" == "true" ]]; then
+        echo "Add to your ${YELLOW}$shell_rc${NC}:"
+        echo ""
         echo -e "${BLUE}# dux-prompt - Docker context in prompt${NC}"
         echo "source ~/.dux/dux-prompt.sh"
         
         if [[ "$shell_type" == "zsh" ]]; then
             echo 'PROMPT='\''$(docker_ps1) '\''$PROMPT'
-            echo "# Or use with spacing: "'RPROMPT='\''$(docker_ps1_with_spacing)'\'''
         else
             echo 'PS1='\''$(docker_ps1) '\''$PS1'
         fi
@@ -121,12 +231,18 @@ show_setup_instructions() {
     echo "Then reload your shell:"
     echo -e "  ${YELLOW}source $shell_rc${NC}"
     echo ""
+    echo "Usage:"
+    echo "  dux              # List all contexts"
+    echo "  dux <name>       # Switch to context"
+    echo "  dux create -r <name> <ssh-host>  # Create remote context"
+    echo "  dux --help       # Show all commands"
+    echo ""
 }
 
 show_interactive_menu() {
     echo "What would you like to install?"
     echo ""
-    echo "  1) dux          - Docker context switcher command"
+    echo "  1) dux          - Docker context switcher (Go binary)"
     echo "  2) dux-prompt   - Docker context in shell prompt"
     echo "  3) Both         - Install everything"
     echo "  q) Quit"
@@ -187,7 +303,7 @@ main() {
                 echo "Usage: install.sh [OPTIONS]"
                 echo ""
                 echo "Options:"
-                echo "  --dux      Install dux (context switcher)"
+                echo "  --dux      Install dux binary (context switcher)"
                 echo "  --prompt   Install dux-prompt (shell prompt)"
                 echo "  --all      Install both components"
                 echo "  -h, --help Show this help message"
@@ -213,13 +329,10 @@ main() {
         exit 1
     fi
     
-    # Create install directory
-    print_info "Creating installation directory..."
-    mkdir -p "$INSTALL_DIR"
-    
     # Install selected components
     if [[ "$INSTALL_DUX" == "true" ]]; then
         install_dux
+        setup_completions
     fi
     
     if [[ "$INSTALL_PROMPT" == "true" ]]; then
@@ -231,4 +344,3 @@ main() {
 }
 
 main "$@"
-

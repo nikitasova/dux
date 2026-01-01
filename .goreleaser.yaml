@@ -1,0 +1,93 @@
+# GoReleaser configuration for dux
+# Run: goreleaser release --clean
+# Test: goreleaser release --snapshot --clean
+
+version: 2
+project_name: dux
+
+builds:
+  - id: dux
+    main: ./cmd/dux
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .Date }}
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+brews:
+  - name: dux
+    homepage: "https://github.com/nikitasova/dux"
+    description: "Docker Use Context - Fast Docker context switching"
+    url_template: "https://github.com/nikitasova/dux/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    directory: Formula
+    test: |
+      system "#{bin}/dux version"
+    install: |
+      bin.install "dux"
+    repository:
+      owner: nikitasova
+      name: homebrew-dux
+      branch: main
+      token: "{{ .Env.GORELEASER_TOKEN }}"
+
+nfpms:
+  - id: dux-deb
+    package_name: dux
+    vendor: nikitasova
+    homepage: "https://github.com/nikitasova/dux"
+    maintainer: nikitasova <nikitasova@users.noreply.github.com>
+    description: "Docker Use Context - Fast Docker context switching"
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/dux/LICENSE
+      - src: README.md
+        dst: /usr/share/doc/dux/README.md
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: '⚠️ Breaking Changes'
+      regexp: "^.*!:.+$"
+      order: 0
+    - title: '✨ Features'
+      regexp: "^.*feat[(\\w)]*:.*$"
+      order: 1
+    - title: '🐛 Bug Fixes'
+      regexp: "^.*fix[(\\w)]*:.*$"
+      order: 2
+    - title: '⚡️ Improvements'
+      regexp: "^.*perf[(\\w)]*:.*$"
+      order: 3

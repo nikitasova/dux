@@ -1,6 +1,5 @@
 #!/bin/bash
 # dux-prompt - Docker context prompt for shell integration
-# Similar to kube-ps1 but for Docker contexts
 #
 # Usage: source this file in your shell rc file
 #   source ~/.dux/dux-prompt.sh

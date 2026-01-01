@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_TOKEN: ${{ secrets.GORELEASER_TOKEN }}
+
+      - name: Upload DEBs
+        uses: actions/upload-artifact@v4
+        with:
+          name: debs
+          path: dist/*.deb
+
+  pages:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download DEBs
+        uses: actions/download-artifact@v4
+        with:
+          name: debs
+          path: debs
+
+      - name: Generate GPG key
+        run: |
+          cat > gpg-batch << EOF
+          %no-protection
+          Key-Type: RSA
+          Key-Length: 4096
+          Name-Real: dux
+          Name-Email: dux@nikitasova.github.io
+          Expire-Date: 0
+          %commit
+          EOF
+          gpg --batch --gen-key gpg-batch
+
+      - name: Build APT repo
+        run: |
+          cp -r site public
+          mkdir -p public/repo/apt/pool public/repo/apt/dists/stable/main/binary-amd64
+          cp debs/*.deb public/repo/apt/pool/ 2>/dev/null || true
+          
+          cd public/repo/apt
+          dpkg-scanpackages pool /dev/null > dists/stable/main/binary-amd64/Packages
+          gzip -k dists/stable/main/binary-amd64/Packages
+          
+          cd dists/stable
+          cat > Release << EOF
+          Origin: dux
+          Label: dux
+          Suite: stable
+          Codename: stable
+          Architectures: amd64 arm64
+          Components: main
+          Description: dux APT repository
+          EOF
+          apt-ftparchive release . >> Release
+          
+          gpg --batch --yes -abs -o Release.gpg Release
+          gpg --batch --yes --clearsign -o InRelease Release
+
+      - name: Export GPG public key
+        run: gpg --armor --export dux > public/dux.gpg
+
+      - name: Deploy to Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
