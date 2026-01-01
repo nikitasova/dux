@@ -31,7 +31,6 @@ brews:
   - name: dux
     homepage: "https://github.com/nikitasova/dux"
     description: "Docker Use Context - Fast Docker context switching"
-    url_template: "https://github.com/nikitasova/dux/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
