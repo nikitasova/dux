@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    environment: release
+    runs-on: [self-hosted, docker]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,7 +40,8 @@ jobs:
 
   pages:
     needs: release
-    runs-on: ubuntu-latest
+    environment: pages
+    runs-on: [self-hosted, docker]
     steps:
       - uses: actions/checkout@v4
 
