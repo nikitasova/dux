@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/nikitasova/dux/releases"><img src="https://img.shields.io/github/v/release/nikitasova/dux?style=flat-square&color=blue" alt="Release"></a>
-  <a href="https://github.com/nikitasova/dux/blob/main/LICENSE"><img src="https://img.shields.io/github/license/nikitasova/dux?style=flat-square" alt="License"></a>
+  <a href="https://github.com/nikitasova/dux/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
   <a href="https://github.com/nikitasova/dux/stargazers"><img src="https://img.shields.io/github/stars/nikitasova/dux?style=flat-square" alt="Stars"></a>
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go" alt="Go Version">
 </p>
