@@ -37,6 +37,9 @@ jobs:
           cp site/index.html _site/
           cp site/style.css _site/
           cp docs/assets/logo/Dux-logo.png _site/logo.png 2>/dev/null || true
+          
+          # APT repo index page
+          echo '<html><head><meta http-equiv="refresh" content="0;url=/dux/"></head><body>APT Repository - <a href="/dux/">Go to main site</a></body></html>' > _site/repo/apt/index.html
 
       - name: Download DEBs from latest release
         run: |

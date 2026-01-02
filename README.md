@@ -78,6 +78,21 @@ $ dux create -r staging root@192.168.1.100
 
 ---
 
+## Shell Completion
+
+```bash
+# Zsh - add to ~/.zshrc
+eval "$(dux completion zsh)"
+
+# Bash - add to ~/.bashrc
+eval "$(dux completion bash)"
+
+# Fish
+dux completion fish > ~/.config/fish/completions/dux.fish
+```
+
+---
+
 ## $ Shell Prompt
 
 Install and configure `dux-prompt` to show context in your prompt:
