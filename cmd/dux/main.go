@@ -2,11 +2,7 @@ package main
 
 import "os"
 
-var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
-)
+var version = "dev"
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
