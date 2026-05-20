@@ -5,7 +5,18 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/nikitasova/dux/internal/docker"
+	"github.com/spf13/cobra"
 )
+
+func contextCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	names, err := docker.GetContextNames()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	return names, cobra.ShellCompDirectiveNoFileComp
+}
 
 func prompt(msg string) string {
 	fmt.Print(msg)

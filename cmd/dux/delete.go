@@ -11,11 +11,12 @@ import (
 var flagForce bool
 
 var deleteCmd = &cobra.Command{
-	Use:     "delete <name>",
-	Aliases: []string{"rm", "d"},
-	Short:   "Delete a Docker context",
-	Args:    cobra.ExactArgs(1),
-	Run:     runDelete,
+	Use:               "delete <name>",
+	Aliases:           []string{"rm", "d"},
+	Short:             "Delete a Docker context",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: contextCompletion,
+	Run:               runDelete,
 }
 
 func init() {
