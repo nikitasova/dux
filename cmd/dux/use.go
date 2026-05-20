@@ -6,10 +6,11 @@ import (
 )
 
 var useCmd = &cobra.Command{
-	Use:   "use <name>",
-	Short: "Switch to a Docker context",
-	Args:  cobra.ExactArgs(1),
-	Run:   runUse,
+	Use:               "use <name>",
+	Short:             "Switch to a Docker context",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: contextCompletion,
+	Run:               runUse,
 }
 
 func runUse(cmd *cobra.Command, args []string) {
